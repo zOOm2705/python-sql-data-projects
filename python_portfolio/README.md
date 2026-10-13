@@ -31,6 +31,3 @@ python 03_task_tracker/task_tracker.py add "Изучить SQL"
 python 03_task_tracker/task_tracker.py list
 python -m unittest discover -s 03_task_tracker -v
 ```
-
-## Примечание
-Это учебные проекты для демонстрации навыков, а не коммерческие разработки. Перед публикацией в GitHub стоит проверить код, добавить скриншоты результатов и при желании расширить функциональность.
