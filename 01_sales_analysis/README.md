@@ -19,3 +19,26 @@
 pip install -r requirements.txt
 python 01_sales_analysis/analyze_sales.py
 ```
+## Результаты работы
+
+Скрипт обрабатывает 120 записей о продажах и формирует сводные таблицы и графики.
+
+Пример результатов:
+- Общая выручка: 31 452
+- Средняя выручка на заказ: 262,10
+- Товар с наибольшей выручкой: Monitor
+- Наибольшая выручка по категории: Electronics — 23 130
+
+## Создаваемые файлы
+
+В папке `output` сохраняются:
+
+- `monthly_revenue.csv` — выручка по месяцам;
+- `revenue_by_category.csv` — выручка по категориям;
+- `revenue_by_region.csv` — выручка по регионам;
+- `monthly_revenue.png` — график выручки по месяцам;
+- `revenue_by_category.png` — график выручки по категориям.
+
+## Используемые технологии
+
+Python, Pandas, NumPy, Matplotlib, pathlib.
