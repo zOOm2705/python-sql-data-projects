@@ -2,11 +2,17 @@ import sqlite3
 from fastapi import FastAPI, Query, Path, HTTPException
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
+from database import get_connection
+from schemas import TicketCreate, TicketUpdate, TicketPatch
+from routers.tickets import router as tickets_router
 
 app = FastAPI()
+app.include_router(tickets_router)
+
+DB_NAME = "tickets.db"
 
 def init_db():
-    conn = sqlite3.connect("tickets.db")
+    conn = get_connection()
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS tickets (
@@ -24,10 +30,7 @@ def init_db():
 
 init_db()
 
-class TicketCreate(BaseModel):
-    client: str = Field(min_length=2, max_length=50)
-    message: str = Field(min_length=5, max_length=500)
-    category: str = "general"
+
 
 tickets = [
     {
@@ -58,53 +61,6 @@ def get_priority(message):
 
 
 
-
-@app.get("/tickets")
-def get_tickets(
-    priority: Optional[str] = Query(
-        default=None,
-        pattern="^(high|medium|normal)$"
-    )
-):
-    conn = sqlite3.connect("tickets.db")
-    conn.row_factory = sqlite3.Row
-
-    if priority:
-        cursor = conn.execute(
-            "SELECT * FROM tickets WHERE priority = ?",
-            (priority,)
-        )
-    else:
-        cursor = conn.execute(
-            "SELECT * FROM tickets"
-        )
-
-    result = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-
-    return result
-
-@app.get("/tickets/{ticket_id}")
-def get_ticket(ticket_id: int = Path(..., gt=0)):
-    conn = sqlite3.connect("tickets.db")
-    conn.row_factory = sqlite3.Row
-
-    cursor = conn.execute(
-        "SELECT * FROM tickets WHERE id = ?",
-        (ticket_id,)
-    )
-
-    ticket = cursor.fetchone()
-    conn.close()
-
-    if ticket is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Ticket not found"
-        )
-
-    return dict(ticket)
-
 @app.post("/tickets")
 def create_ticket(ticket: TicketCreate):
 
@@ -112,7 +68,7 @@ def create_ticket(ticket: TicketCreate):
 
     priority = get_priority(ticket_data["message"])
 
-    conn = sqlite3.connect("tickets.db")
+    conn = get_connection()
 
     cursor = conn.execute(
         """
@@ -137,3 +93,98 @@ def create_ticket(ticket: TicketCreate):
         "id": ticket_id,
         "priority": priority
     }
+
+
+@app.put("/tickets/{ticket_id}")
+def update_ticket(ticket_id: int, ticket: TicketUpdate):
+    ticket_data = ticket.model_dump()
+
+    conn = get_connection()
+
+    cursor = conn.execute(
+        """
+        UPDATE tickets
+        SET client = ?, message = ?, category = ?, priority = ?
+        WHERE id = ?
+        """,
+        (
+            ticket_data["client"],
+            ticket_data["message"],
+            ticket_data["category"],
+            ticket_data["priority"],
+            ticket_id
+        )
+    )
+
+    conn.commit()
+
+    if cursor.rowcount == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    conn.close()
+
+    return {"id": ticket_id, **ticket_data}
+
+
+@app.patch("/tickets/{ticket_id}")
+def patch_ticket(ticket_id: int, ticket: TicketPatch):
+    ticket_data = ticket.model_dump(exclude_unset=True)
+
+    if not ticket_data:
+        raise HTTPException(
+            status_code=400,
+            detail="No fields to update"
+        )
+
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+
+    set_clause = ", ".join(
+        f"{field} = ?" for field in ticket_data
+    )
+
+    values = list(ticket_data.values()) + [ticket_id]
+
+    cursor = conn.execute(
+        f"UPDATE tickets SET {set_clause} WHERE id = ?",
+        values
+    )
+
+    conn.commit()
+
+    if cursor.rowcount == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    cursor = conn.execute(
+        "SELECT * FROM tickets WHERE id = ?",
+        (ticket_id,)
+    )
+
+    result = dict(cursor.fetchone())
+    conn.close()
+
+    return result
+
+@app.delete("/tickets/{ticket_id}")
+def delete_ticket(ticket_id: int):
+    conn = get_connection()
+
+    cursor = conn.execute(
+        "DELETE FROM tickets WHERE id = ?",
+        (ticket_id,)
+    )
+
+    conn.commit()
+    conn.close()
+
+    if cursor.rowcount == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="Ticket not found"
+        )
+
+    return {"message": "Ticket deleted successfully"}
+
+
